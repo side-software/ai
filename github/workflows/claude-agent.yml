@@ -1,0 +1,261 @@
+# Claude Agent — 5-mode GitHub Actions workflow
+#
+# This is a REFERENCE workflow. Copy it into your project's
+# .github/workflows/ directory and customize the placeholders.
+#
+# Required secrets:
+#   ANTHROPIC_API_KEY — your Anthropic API key
+#
+# Required labels (see ../labels.yml):
+#   status:clarify, status:ready, status:in-progress, status:in-review
+#
+# Modes:
+#   clarify   — reads the issue, asks clarifying questions
+#   plan      — reads the issue + skills, posts implementation plan
+#   implement — executes the plan, runs verify, opens a PR
+#   review    — reviews PR code, approves or requests changes
+#   default   — freeform @claude interaction
+#
+# Trigger model — labels are the canonical trigger:
+#   1. Labels:   apply status:clarify, status:ready, status:in-progress,
+#                or status:in-review to an issue/PR
+#   2. Comments: @claude clarify, @claude plan, @claude implement,
+#                @claude review, or plain @claude
+#   3. Project board: configure GitHub Projects to apply labels on
+#                column moves — the label triggers this workflow
+#
+# Typical flow:
+#   1. Create an issue.
+#   2. Apply status:clarify → agent asks questions.
+#   3. Apply status:ready → agent posts plan.
+#   4. Apply status:in-progress → agent opens PR.
+#   5. Apply status:in-review → agent reviews and approves/denies.
+#   6. Human merges.
+
+name: Claude Agent
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, labeled]
+  pull_request:
+    types: [labeled]
+
+concurrency:
+  group: claude-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  claude:
+    if: |
+      github.event.sender.type != 'Bot' && (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'issues' && github.event.action == 'labeled' && startsWith(github.event.label.name, 'status:')) ||
+        (github.event_name == 'issues' && github.event.action != 'labeled' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))) ||
+        (github.event_name == 'pull_request' && github.event.action == 'labeled' && github.event.label.name == 'status:in-review')
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── CUSTOMIZE: your package manager and Node version ──
+      # Uncomment the appropriate setup for your project:
+      #
+      # pnpm:
+      # - uses: pnpm/action-setup@v4
+      # - uses: actions/setup-node@v6
+      #   with:
+      #     node-version: 22
+      #     cache: pnpm
+      # - run: pnpm install --frozen-lockfile
+      #
+      # npm:
+      # - uses: actions/setup-node@v6
+      #   with:
+      #     node-version: 22
+      #     cache: npm
+      # - run: npm ci
+
+      - name: Detect mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          LABEL_NAME: ${{ github.event.label.name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          mode="default"
+          base_branch="main"
+
+          if [[ "$EVENT_NAME" == "issues" && "$EVENT_ACTION" == "labeled" ]]; then
+            case "$LABEL_NAME" in
+              status:clarify)     mode="clarify" ;;
+              status:ready)       mode="plan" ;;
+              status:in-progress) mode="implement" ;;
+            esac
+          elif [[ "$EVENT_NAME" == "pull_request" && "$EVENT_ACTION" == "labeled" ]]; then
+            if [[ "$LABEL_NAME" == "status:in-review" ]]; then
+              mode="review"
+            fi
+          fi
+
+          if [[ "$mode" == "default" ]]; then
+            body="${COMMENT_BODY:-$ISSUE_BODY}"
+            if echo "$body" | grep -qiE '@claude[[:space:]]+clarify'; then
+              mode="clarify"
+            elif echo "$body" | grep -qiE '@claude[[:space:]]+(plan|ready)'; then
+              mode="plan"
+            elif echo "$body" | grep -qiE '@claude[[:space:]]+implement'; then
+              mode="implement"
+            elif echo "$body" | grep -qiE '@claude[[:space:]]+review'; then
+              mode="review"
+            fi
+
+            if [[ "$mode" == "implement" ]]; then
+              extracted=$(echo "$body" | grep -oiE '\-\-base[[:space:]]+[a-zA-Z0-9/_.-]+' | head -1 | awk '{print $2}')
+              if [[ -n "$extracted" ]]; then
+                base_branch="$extracted"
+              fi
+            fi
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "base_branch=$base_branch" >> "$GITHUB_OUTPUT"
+
+      # ── CLARIFY ──
+      - name: Run Claude (clarify)
+        if: steps.mode.outputs.mode == 'clarify'
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --max-turns 15
+          prompt: |
+            You are in CLARIFY MODE. Read the issue, understand it, ask
+            clarifying questions, and propose acceptance criteria. Do NOT
+            write code or modify files.
+
+            1. Read the issue body.
+            2. Read the project's conventions skill and CLAUDE.md.
+            3. Read files mentioned in the issue or relevant to its scope.
+            4. Post a comment:
+
+               ## Clarification
+               **My understanding:** (1-2 paragraphs)
+               **Questions:** (numbered, or "None")
+               **Proposed acceptance criteria:** (checklist)
+               **Suggested skills:** (which skills to follow during implementation)
+
+               ---
+               *Apply `status:ready` or comment `@claude plan` to proceed.*
+
+      # ── PLAN ──
+      - name: Run Claude (plan)
+        if: steps.mode.outputs.mode == 'plan'
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --max-turns 20
+          prompt: |
+            You are in PLAN MODE. Post a detailed implementation plan. Do NOT
+            write code or modify files.
+
+            1. Read the issue and all comments (use clarification if it exists).
+            2. Read the project's conventions skill and relevant per-task skills.
+            3. Read the files the task touches.
+            4. Post a comment:
+
+               ## Plan
+               **Task:** (one paragraph)
+               **Acceptance criteria:** (checklist)
+               **Files I'll touch:** (paths with descriptions)
+               **Approach:** (numbered steps)
+               **Skills I'll follow:** (with reasons)
+               **Open questions:** (or "None")
+               **Risks:** (what could go wrong)
+
+               ---
+               *Apply `status:in-progress` or comment `@claude implement`.*
+
+      # ── IMPLEMENT ──
+      - name: Run Claude (implement)
+        if: steps.mode.outputs.mode == 'implement'
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --max-turns 60
+          prompt: |
+            You are in IMPLEMENT MODE. Execute the plan and open a PR.
+
+            BASE BRANCH: ${{ steps.mode.outputs.base_branch }}
+
+            1. Read issue + comments. Find the most recent "## Plan" comment.
+            2. If no plan exists, ask for `@claude plan` first.
+            3. Check out the base branch.
+            4. Read the conventions skill and skills referenced in the plan.
+            5. Implement the plan following project conventions strictly.
+            6. Run the verify command. It must exit 0.
+               - If it fails: fix it.
+               - If out of scope: open as DRAFT PR with explanation.
+            7. Open a PR targeting the base branch:
+               - Clear title
+               - Links issue with `Closes #<number>`
+               - Summarizes changes and deviations from plan
+            8. Apply `status:in-review` label to the PR.
+            9. Comment on the issue linking the PR.
+
+      # ── REVIEW ──
+      - name: Run Claude (review)
+        if: steps.mode.outputs.mode == 'review'
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --max-turns 30
+          prompt: |
+            You are in REVIEW MODE. Review the PR code thoroughly.
+
+            1. Read the PR description and linked issue.
+            2. Read the project's conventions skill.
+            3. Check out the PR branch and run the verify command.
+            4. Read the full diff. For each file, evaluate:
+               - Convention compliance
+               - Code quality (naming, dead code, types)
+               - Test coverage
+            5. Submit a review:
+               - APPROVE if everything is good
+               - REQUEST CHANGES with specific inline comments if not
+               - Categorize issues: Must fix / Should fix / Nit
+            6. Verify failure = automatic REQUEST CHANGES.
+
+            You can approve or request changes. You cannot merge.
+
+      # ── DEFAULT ──
+      - name: Run Claude (default)
+        if: steps.mode.outputs.mode == 'default'
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: --max-turns 30
+          prompt: |
+            You are in DEFAULT MODE. The user @mentioned you. Read the full
+            context and respond helpfully. Read CLAUDE.md and the conventions
+            skill first. You may read files and make changes if explicitly
+            asked. Otherwise, answer the question or suggest a structured mode.

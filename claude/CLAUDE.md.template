@@ -1,0 +1,74 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code when working with code in this repository.
+
+## Commands
+
+<!-- List the commands an agent needs to know. Keep it short — just the ones
+     that matter for day-to-day development and verification. -->
+
+```bash
+{{INSTALL_COMMAND}}       # Install dependencies
+{{DEV_COMMAND}}           # Start dev server
+{{BUILD_COMMAND}}         # Production build
+{{TEST_COMMAND}}          # Run tests
+{{VERIFY_COMMAND}}        # Full verification (type check + build + test)
+```
+
+## Architecture
+
+<!-- One or two paragraphs describing what this project is and how it's
+     structured. An agent reading this should understand the major layers,
+     where code lives, and how data flows. -->
+
+{{PROJECT_DESCRIPTION}}
+
+### Key directories
+
+<!-- Map the codebase so an agent knows where to look. -->
+
+- `{{SOURCE_DIR}}/` — {{description}}
+- `{{COMPONENTS_DIR}}/` — {{description}}
+- `{{PAGES_DIR}}/` — {{description}}
+
+### Data flow
+
+<!-- How does data move through the system? Config → validation → state → UI → URL?
+     Database → API → frontend? Describe the pipeline. -->
+
+```
+{{DATA_FLOW_DIAGRAM}}
+```
+
+## Key conventions
+
+<!-- The rules that aren't obvious from reading the code. Each should be one
+     line or a short bullet. For the "why", point to the project-conventions skill. -->
+
+- **Path alias**: `@/*` maps to `{{SOURCE_DIR}}/*`
+- **Verify before done**: Always run `{{VERIFY_COMMAND}}` before declaring a task complete
+- {{OTHER_CONVENTIONS}}
+
+## Skills
+
+<!-- Point the agent to the skills it should read. The project-conventions
+     skill is the gateway — read it first. Per-task skills apply when relevant. -->
+
+| Command | Skill | When to use |
+|---|---|---|
+| — | `project-conventions` | Read before any non-trivial change |
+| `/verify` | — | Run verification suite |
+| `/new-component` | `add-component` | Adding a UI component |
+| `/new-test` | — | Writing tests |
+
+## Automated guardrails
+
+<!-- If hooks are configured in .claude/settings.json, document them here
+     so the agent understands why checks run automatically. -->
+
+Hooks are configured in `.claude/settings.json`:
+
+- **PostToolUse**: {{describe what runs after edits}}
+- **PreToolUse**: {{describe what's blocked and why}}
+
+These hooks run without prompting. If a hook blocks your action, read the error — it explains what to do instead.

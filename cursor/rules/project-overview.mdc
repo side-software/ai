@@ -1,0 +1,17 @@
+---
+description: Repo map, stack, commands, and key file locations for {{PROJECT_NAME}}
+alwaysApply: true
+---
+
+# Project Overview
+
+- **Stack**: {{STACK_DESCRIPTION}}
+- **Package manager**: {{PACKAGE_MANAGER}}
+- **Where things live**:
+  - {{Key config}}: {{path}}
+  - {{State management}}: {{path}}
+  - {{App entry point}}: {{path}}
+  - {{Data pipeline}}: {{path}}
+- **Run**: `{{DEV_COMMAND}}` (full stack); frontend dev: `{{FRONTEND_DEV_COMMAND}}`
+- **Verify**: `{{VERIFY_COMMAND}}`
+- **Checking the API**: {{API_URL}} — use this URL to inspect API responses when debugging

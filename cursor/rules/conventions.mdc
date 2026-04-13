@@ -1,0 +1,21 @@
+---
+description: Architecture rules and conventions for {{PROJECT_NAME}}
+globs: src/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Conventions
+
+<!-- This rule fires when editing source files matching the glob above.
+     List the rules that matter for code in those directories. -->
+
+- {{Convention 1 — e.g., "Never import X in Y code"}}
+- {{Convention 2 — e.g., "Keep domain state controlled via props and callbacks"}}
+- {{Convention 3 — e.g., "Use the project's Tailwind prefix in library components"}}
+- Prefer existing hooks and utilities over building new ones.
+- Export new APIs from barrel files and package entry points.
+
+Required references:
+
+- `.claude/skills/project-conventions/SKILL.md`
+- `.claude/skills/{{relevant-task-skill}}/SKILL.md`

@@ -1,0 +1,22 @@
+# Labels for the Claude Agent workflow.
+# Apply these to your repo via gh CLI:
+#   gh label create "status:clarify" --color "d4c5f9" --description "Agent asks clarifying questions"
+#   gh label create "status:ready" --color "c5def5" --description "Agent plans implementation"
+#   gh label create "status:in-progress" --color "fbca04" --description "Agent implements the plan"
+#   gh label create "status:in-review" --color "0e8a16" --description "Agent reviews the PR"
+
+- name: "status:clarify"
+  color: "d4c5f9"
+  description: "Agent asks clarifying questions and proposes acceptance criteria"
+
+- name: "status:ready"
+  color: "c5def5"
+  description: "Agent reads the issue and posts a detailed implementation plan"
+
+- name: "status:in-progress"
+  color: "fbca04"
+  description: "Agent executes the plan and opens a pull request"
+
+- name: "status:in-review"
+  color: "0e8a16"
+  description: "Agent reviews the PR code and approves or requests changes"

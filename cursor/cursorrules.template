@@ -1,0 +1,23 @@
+---
+description: Core project conventions and skill routing
+alwaysApply: true
+---
+
+# {{PROJECT_NAME}} Core
+
+Use these rules for all non-trivial changes:
+
+- Read `.claude/skills/project-conventions/SKILL.md` before coding.
+- {{RULE_1}}
+- {{RULE_2}}
+- {{RULE_3}}
+- Follow data flow: {{DATA_FLOW_SUMMARY}}
+
+Use the matching skill for focused tasks:
+
+- {{Task type}}: `.claude/skills/{{skill-name}}/SKILL.md`
+- {{Task type}}: `.claude/skills/{{skill-name}}/SKILL.md`
+
+Development workflow reference:
+
+- `.agents/workflows/development.md`
